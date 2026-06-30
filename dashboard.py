@@ -16,7 +16,7 @@ from chronos import ChronosPipeline
 st.set_page_config(page_title="Canlı Trafik Analiz Paneli", layout="wide")
 
 st.title("🧠 Kendi Kendini Optimize Eden Canlı Analiz & Forecasting Paneli")
-st.markdown("RTX 4060 üzerinde **In-Context Learning** ile veri aktıkça kararlılığı artan ve başarı oranını anlık hesaplayan LLM sistemi.")
+st.markdown("**In-Context Learning** ile veri aktıkça kararlılığı artan ve başarı oranını anlık hesaplayan LLM sistemi.")
 
 @st.cache_resource
 def modeli_yukle():
@@ -24,7 +24,7 @@ def modeli_yukle():
     pipeline = ChronosPipeline.from_pretrained(
         "amazon/chronos-t5-mini",
         device_map=device,
-        torch_dtype=torch.bfloat16, # RTX 4060 için tam optimize hızlı veri tipi
+        torch_dtype=torch.bfloat16,
     )
     return pipeline
 
@@ -68,7 +68,7 @@ log_alani = st.empty()
 # ==============================================================================
 # 4. CANLI DÖNGÜ VE ADAPTE OLAN HAFIZA MOTORU
 # ==============================================================================
-# Modelin beslendiği pencere sınırını kaldırıyoruz, zamanla büyüyerek akıllanacak
+
 kayan_pencere = []
 gecmis_df = pd.DataFrame(columns=["Zaman", "Değer", "Çizgi Tipi"])
 kalici_gelecek_df = pd.DataFrame(columns=["Zaman", "Değer", "Çizgi Tipi"])
@@ -82,13 +82,11 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
         anlik_trafik = satir["Vehicles"]
         kayan_pencere.append(anlik_trafik)
         
-        # Modelin kararlı çalışması için ilk 20 verinin birikmesini bekliyoruz
         if len(kayan_pencere) < 20:
             metrik_durum.metric("Sistem Durumu", "Veri Toplanıyor...", delta=f"{len(kayan_pencere)}/20", delta_color="off")
             time.sleep(0.01)
             continue
             
-        # Bilgilendirme bandını güncelleyelim
         egitim_bandi.info(f"🤖 Boyutu: {len(kayan_pencere)} Saatlik Geçmiş Hafıza")
 
         # Chronos Anlık Tahmin (1 Adım)
@@ -105,24 +103,24 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
             hata_orani = abs(anlik_trafik - beklenen_deger) / anlik_trafik
             tahmin_hatalari.append(hata_orani)
         
-        # Son 30 adımdaki isabet yüzdesini hesapla
-        guncel_mape = np.mean(tahmin_hatalari[-30:])
+        # Son 100 adımdaki isabet yüzdesini hesapla
+        guncel_mape = np.mean(tahmin_hatalari[-100:])
         dogruluk_yuzdesi = max(0.0, (1.0 - guncel_mape) * 100)
         
         # Anomali Kararı
         durum_yazisi = "✅ TEMİZ"
         if anlik_trafik > ust_limit:
-            durum_yazisi = "🚨 YOĞUNLUK"
+            durum_yazisi = "🚨 ANORMAL YOĞUN"
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Aşırı Trafik Patlaması", "Değer": int(anlik_trafik)})
         elif anlik_trafik < alt_limit:
-            durum_yazisi = "⚠️ TRAFİK ÇÖKÜŞÜ"
+            durum_yazisi = "⚠️ ANORMAL TENHA"
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Sıra Dışı Trafik Düşüşü", "Değer": int(anlik_trafik)})
             
         # Metrik Kartlarını Güncelle
         metrik_trafik.metric("Anlık Trafik Hacmi", f"{anlik_trafik} Araç")
         metrik_beklenen.metric("Chronos Beklentisi", f"{beklenen_deger} Araç")
         metrik_durum.metric("Sistem Sağlığı", durum_yazisi)
-        metrik_dogruluk.metric("Model Doğruluk Oranı", f"%{dogruluk_yuzdesi:.1f}", delta="Son 30 Adım")
+        metrik_dogruluk.metric("Model Doğruluk Oranı", f"%{dogruluk_yuzdesi:.1f}", delta="Son 100 Adım")
         
         # --- KALICI FORECASTING: GELECEK 5 ADIM ---
         tahmin_5 = pipeline.predict(context, 5)

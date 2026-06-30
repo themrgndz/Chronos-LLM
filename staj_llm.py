@@ -9,7 +9,6 @@ from chronos import ChronosPipeline
 print("Veri seti yükleniyor, hacı...")
 df = pd.read_csv("traffic.csv")
 
-# Tarih sütununu indeks yapalım ve sıralayalım
 df['DateTime'] = pd.to_datetime(df['DateTime'])
 df = df.sort_values('DateTime')
 
@@ -33,7 +32,7 @@ kayan_pencere = deque(maxlen=10)
 
 veri_motoru = canli_veri_akisi(df_kavsak)
 
-print("\nCanlı akış simülasyonu başlıyor, izle brom (Durdurmak için Ctrl+C veya Stop):\n")
+print("\nCanlı akış simülasyonu başlıyor (Durdurmak için Ctrl+C veya Stop):\n")
 
 try:
     # Test amaçlı ilk 15 verinin akışını simüle edelim
@@ -44,7 +43,6 @@ try:
         
         print(f"[{yeni_log['Zaman']}] Anlık Gelen Trafik: {yeni_log['Trafik']} araç | Hafızadaki Son Durum (Pencere): {list(kayan_pencere)}")
         
-        # 1 saniye bekle (Canlı akış hissi için)
         time.sleep(1)
         
 except StopIteration:
@@ -59,36 +57,35 @@ print(f"\nModel Kontrolü -> Kod {device.upper()} üzerinde çalışacak.")
 pipeline = ChronosPipeline.from_pretrained(
     "amazon/chronos-t5-mini",
     device_map=device,
-    torch_dtype=torch.bfloat16, # 4060 için tam optimize hızlı veri tipi
+    torch_dtype=torch.bfloat16,
 )
 print("Chronos Başarıyla Hafızaya Alındı, Agam!\n")
 
 # ==============================================================================
 # CHRONOS ENTEGRASYONLU CANLI ANALİZ DÖNGÜSÜ
 # ==============================================================================
-# Modelin geçmişi anlayabilmesi için pencereyi 30 yapıyoruz
-kayan_pencere = deque(maxlen=30)
+kayan_pencere = deque(maxlen=100)
 veri_motoru = canli_veri_akisi(df_kavsak)
 
 print("Chronos canlı akışı tarıyor... (Durdurmak için Ctrl+C)")
 
 try:
-    for i in range(40): # İlk 40 veri üzerinde simülasyon yapalım
+    for i in range(40):
         yeni_log = next(veri_motoru)
         anlik_trafik = yeni_log["Trafik"]
         kayan_pencere.append(anlik_trafik)
         
-        # Modelin tahminde bulunabilmesi için pencerede en az 15-20 veri birikmeli
+        # Modelin tahminde bulunabilmesi için pencerede en az 15-20 veri biriktiriyoruz
         if len(kayan_pencere) < 20:
             print(f"[{yeni_log['Zaman']}] Veri biriktiriliyor... ({len(kayan_pencere)}/20)")
-            time.sleep(0.1) # İlk başta hızlıca veri toplasın
+            time.sleep(0.1)
             continue
             
         # --- CHRONOS VE NUMPY ANALİZ MOTORU ---
         # 1. Kayan pencereyi tensöre çevirip modelin emrine veriyoruz
         context = torch.tensor(list(kayan_pencere), dtype=torch.float32)
         
-        # 2. Önümüzdeki 1 adımı (saati) tahmin etmesini istiyoruz
+        # 2. Önümüzdeki 1 adımı (saati) tahmin
         tahmin = pipeline.predict(context, 1)
         
         # 3. NumPy devreye giriyor: Tahmin dağılımının %5, %50 ve %95'lik dilimlerini hesaplıyoruz
