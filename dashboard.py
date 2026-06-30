@@ -87,7 +87,7 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
             time.sleep(0.01)
             continue
             
-        egitim_bandi.info(f"🤖 Boyutu: {len(kayan_pencere)} Saatlik Geçmiş Hafıza")
+        egitim_bandi.info(f"🤖 Boyutu: {len(kayan_pencere)} Verilik Geçmiş Hafıza")
 
         # Chronos Anlık Tahmin (1 Adım)
         context = torch.tensor(kayan_pencere, dtype=torch.float32)
