@@ -15,7 +15,7 @@ from chronos import ChronosPipeline
 # ==============================================================================
 st.set_page_config(page_title="Canlı Trafik Analiz Paneli", layout="wide")
 
-st.title("🧠 Kendi Kendini Optimize Eden Canlı Analiz & Forecasting Paneli")
+st.title("🚀 Canlı Analiz & Forecasting Paneli")
 st.markdown("**In-Context Learning** ile veri aktıkça kararlılığı artan ve başarı oranını anlık hesaplayan LLM sistemi.")
 
 @st.cache_resource
@@ -31,7 +31,7 @@ def modeli_yukle():
 pipeline = modeli_yukle()
 
 # ==============================================================================
-# 2. VERİ SETİN SÜRECİ
+# 2. VERİ SETİNİN SÜRECİ
 # ==============================================================================
 @st.cache_data
 def veri_hazirla():
@@ -59,7 +59,7 @@ with kpi_4:
 
 egitim_bandi = st.empty()
 
-st.subheader("💡 Çevrimiçi Adapte Olan Zaman Serisi Grafiği")
+st.subheader("📈 Çevrimiçi Adapte Olan Zaman Serisi Grafiği")
 grafik_alani = st.empty()
 
 st.subheader("🚨 Sistem Olay Logları (Anomali Kayıtları)")
@@ -87,7 +87,7 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
             time.sleep(0.01)
             continue
             
-        egitim_bandi.info(f"🤖 Boyutu: {len(kayan_pencere)} Verilik Geçmiş Hafıza")
+        egitim_bandi.info(f"🧠 Boyutu: {len(kayan_pencere)} Verilik Geçmiş Hafıza")
 
         # Chronos Anlık Tahmin (1 Adım)
         context = torch.tensor(kayan_pencere, dtype=torch.float32)
@@ -98,7 +98,7 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
         ust_limit = float(ust_esik[0])
         alt_limit = float(alt_esik[0])
         
-        # --- 📊 DOĞRULUK ORANI HESABI (MAPE tabanlı) ---
+        # --- 🎯 DOĞRULUK ORANI HESABI (MAPE tabanlı) ---
         if anlik_trafik > 0:
             hata_orani = abs(anlik_trafik - beklenen_deger) / anlik_trafik
             tahmin_hatalari.append(hata_orani)
@@ -108,12 +108,12 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
         dogruluk_yuzdesi = max(0.0, (1.0 - guncel_mape) * 100)
         
         # Anomali Kararı
-        durum_yazisi = "✅ TEMİZ"
+        durum_yazisi = "🟢 TEMİZ"
         if anlik_trafik > ust_limit:
-            durum_yazisi = "🚨 ANORMAL YOĞUN"
+            durum_yazisi = "🔴 ANORMAL YOĞUN"
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Aşırı Trafik Patlaması", "Değer": int(anlik_trafik)})
         elif anlik_trafik < alt_limit:
-            durum_yazisi = "⚠️ ANORMAL TENHA"
+            durum_yazisi = "🔵 ANORMAL TENHA"
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Sıra Dışı Trafik Düşüşü", "Değer": int(anlik_trafik)})
             
         # Metrik Kartlarını Güncelle
