@@ -88,16 +88,16 @@ try:
         # 2. Önümüzdeki 1 adımı (saati) tahmin
         tahmin = pipeline.predict(context, 1)
         
-        # 3. NumPy devreye giriyor: Tahmin dağılımının %5, %50 ve %95'lik dilimlerini hesaplıyoruz
+        # Tahmin dağılımının %5, %50 ve %95'lik dilimlerini hesaplıyoruz
         tahmin_numpy = tahmin[0].numpy()
         alt_esik, medyan, ust_esik = np.percentile(tahmin_numpy, [5, 50, 95], axis=0)
         
         # 4. Anomali Karar Mekanizması
         durum = "✅ NORMAL"
         if anlik_trafik > ust_esik[0]:
-            durum = "🚨 ANOMALİ (Aşırı Yoğunluk / DDoS Şüphesi)"
+            durum = "🚨 ANOMALİ (Aşırı Yoğunluk)"
         elif anlik_trafik < alt_esik[0]:
-            durum = "⚠️ ANOMALİ (Trafik Çöküşü / Sistem Hatası)"
+            durum = "⚠️ ANOMALİ (Aşırı Tenha)"
             
         print(f"[{yeni_log['Zaman']}] Trafik: {anlik_trafik} | Beklenen: {int(medyan[0])} | Durum: {durum}")
         

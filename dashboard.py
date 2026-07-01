@@ -16,7 +16,7 @@ from chronos import ChronosPipeline
 st.set_page_config(page_title="Canlı Trafik Analiz Paneli", layout="wide")
 
 st.title("🚀 Canlı Analiz & Forecasting Paneli")
-st.markdown("**In-Context Learning** ile veri aktıkça kararlılığı artan ve başarı oranını anlık hesaplayan LLM sistemi.")
+st.markdown("**In-Context Learning** ile veri akışı kesilmeden çalışan LLM sistemi.")
 
 @st.cache_resource
 def modeli_yukle():
@@ -31,7 +31,7 @@ def modeli_yukle():
 pipeline = modeli_yukle()
 
 # ==============================================================================
-# 2. VERİ SETİNİN SÜRECİ
+# 2. VERİ SETİN SÜRECİ
 # ==============================================================================
 @st.cache_data
 def veri_hazirla():
@@ -60,6 +60,7 @@ with kpi_4:
 egitim_bandi = st.empty()
 
 st.subheader("📈 Çevrimiçi Adapte Olan Zaman Serisi Grafiği")
+st.caption("💡 İpucu: Sağdaki efsanede (Legend) çizgi isimlerine tıklayarak akışı bozmadan anlık olarak çizgileri gizleyebilir veya açabilirsiniz. Çoklu seçim için Shift tuşuna basılı tutun.")
 grafik_alani = st.empty()
 
 st.subheader("🚨 Sistem Olay Logları (Anomali Kayıtları)")
@@ -72,6 +73,7 @@ log_alani = st.empty()
 kayan_pencere = []
 gecmis_df = pd.DataFrame(columns=["Zaman", "Değer", "Çizgi Tipi"])
 kalici_gelecek_df = pd.DataFrame(columns=["Zaman", "Değer", "Çizgi Tipi"])
+anomali_noktalari_df = pd.DataFrame(columns=["Zaman", "Değer", "Tip"])
 anomali_loglari = []
 tahmin_hatalari = []
 
@@ -98,25 +100,32 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
         ust_limit = float(ust_esik[0])
         alt_limit = float(alt_esik[0])
         
-        # --- 🎯 DOĞRULUK ORANI HESABI (MAPE tabanlı) ---
+        # --- 🎯 DOĞRULUK ORANI HESABI ---
         if anlik_trafik > 0:
             hata_orani = abs(anlik_trafik - beklenen_deger) / anlik_trafik
             tahmin_hatalari.append(hata_orani)
         
-        # Son 100 adımdaki isabet yüzdesini hesapla
         guncel_mape = np.mean(tahmin_hatalari[-100:])
         dogruluk_yuzdesi = max(0.0, (1.0 - guncel_mape) * 100)
         
-        # Anomali Kararı
+        # Anomali Kararı ve Loglama
         durum_yazisi = "🟢 TEMİZ"
+        is_anomali = False
+        
         if anlik_trafik > ust_limit:
             durum_yazisi = "🔴 ANORMAL YOĞUN"
+            is_anomali = True
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Aşırı Trafik Patlaması", "Değer": int(anlik_trafik)})
         elif anlik_trafik < alt_limit:
             durum_yazisi = "🔵 ANORMAL TENHA"
+            is_anomali = True
             anomali_loglari.append({"Zaman": zaman.strftime("%Y-%m-%d %H:%M:%S"), "Olay": "Sıra Dışı Trafik Düşüşü", "Değer": int(anlik_trafik)})
             
-        # Metrik Kartlarını Güncelle
+        if is_anomali:
+            yeni_anomali_noktasi = pd.DataFrame({"Zaman": [zaman], "Değer": [float(anlik_trafik)], "Tip": ["Anomali Noktası"]})
+            anomali_noktalari_df = pd.concat([anomali_noktalari_df, yeni_anomali_noktasi]).drop_duplicates(subset=["Zaman"])
+        
+        # Metrik Kartları
         metrik_trafik.metric("Anlık Trafik Hacmi", f"{anlik_trafik} Araç")
         metrik_beklenen.metric("Chronos Beklentisi", f"{beklenen_deger} Araç")
         metrik_durum.metric("Sistem Sağlığı", durum_yazisi)
@@ -137,30 +146,57 @@ if st.button("Sistemi ve Canlı Analizi Ateşle"):
         yeni_gelecek_df = pd.DataFrame(gelecek_listesi)
         kalici_gelecek_df = pd.concat([kalici_gelecek_df, yeni_gelecek_df]).drop_duplicates(subset=["Zaman"], keep="last")
         
-        # Havuzları hazırla ve birleştir
+        # Havuzları Birleştirme
         yeni_gercek = pd.DataFrame({"Zaman": [zaman], "Değer": [float(anlik_trafik)], "Çizgi Tipi": ["Gerçek Trafik"]})
         yeni_beklenen = pd.DataFrame({"Zaman": [zaman], "Değer": [float(beklenen_deger)], "Çizgi Tipi": ["Anlık Beklenti"]})
+        yeni_ust_limit = pd.DataFrame({"Zaman": [zaman], "Değer": [ust_limit], "Çizgi Tipi": ["Üst Sınır (%95 Güven)"]})
+        yeni_alt_limit = pd.DataFrame({"Zaman": [zaman], "Değer": [alt_limit], "Çizgi Tipi": ["Alt Sınır (%5 Güven)"]})
         
-        gecmis_df = pd.concat([gecmis_df, yeni_gercek, yeni_beklenen]).drop_duplicates(subset=["Zaman", "Çizgi Tipi"])
+        gecmis_df = pd.concat([gecmis_df, yeni_gercek, yeni_beklenen, yeni_ust_limit, yeni_alt_limit]).drop_duplicates(subset=["Zaman", "Çizgi Tipi"])
         
         grafik_havuzu = pd.concat([gecmis_df, kalici_gelecek_df])
         grafik_havuzu["Değer"] = grafik_havuzu["Değer"].astype(float)
         
-        # --- ALTAIR GRAFİK ---
-        chart = alt.Chart(grafik_havuzu).mark_line().encode(
+        # ==============================================================================
+        # 🎛️ GERİYE UYUMLU ANLIK ETKİLEŞİM MOTORU (ALTAIR v4 & v5 UYUMLU)
+        # ==============================================================================
+        # Hem v4 hem v5 sürümlerinde efsane seçimini destekleyen güvenli mekanizma:
+        try:
+            seçim = alt.selection_point(fields=['Çizgi Tipi'], bind='legend')
+        except AttributeError:
+            seçim = alt.selection_multi(fields=['Çizgi Tipi'], bind='legend')
+        
+        # 1. Katman: Çizgiler
+        ana_cizgiler = alt.Chart(grafik_havuzu).mark_line().encode(
             x=alt.X('Zaman:T', title='Zaman Ekseni'),
             y=alt.Y('Değer:Q', title='Araç / Trafik Sayısı', scale=alt.Scale(zero=False)),
             color=alt.Color('Çizgi Tipi:N', scale=alt.Scale(
-                domain=['Gerçek Trafik', 'Anlık Beklenti', 'Gelecek Projeksiyonu (5s)'],
-                range=['#FF4B4B', '#1F77B4', '#00CC96']
+                domain=['Gerçek Trafik', 'Anlık Beklenti', 'Gelecek Projeksiyonu (5s)', 'Üst Sınır (%95 Güven)', 'Alt Sınır (%5 Güven)'],
+                range=['#FF4B4B', '#1F77B4', '#00CC96', '#FFBB00', '#FFBB00']
             )),
             strokeDash=alt.StrokeDash('Çizgi Tipi:N', scale=alt.Scale(
-                domain=['Gerçek Trafik', 'Anlık Beklenti', 'Gelecek Projeksiyonu (5s)'],
-                range=[[0, 0], [0, 0], [5, 5]]
-            ))
-        ).properties(height=450).interactive()
+                domain=['Gerçek Trafik', 'Anlık Beklenti', 'Gelecek Projeksiyonu (5s)', 'Üst Sınır (%95 Güven)', 'Alt Sınır (%5 Güven)'],
+                range=[[0, 0], [0, 0], [5, 5], [3, 3], [3, 3]]
+            )),
+            opacity=alt.condition(seçim, alt.value(1.0), alt.value(0.0))
+        )
         
-        grafik_alani.altair_chart(chart, width="stretch")
+        # Sürüm kontrolüne göre parametreyi grafiğe bağlama metodunu seçiyoruz
+        if hasattr(ana_cizgiler, 'add_parameter'):
+            ana_cizgiler = ana_cizgiler.add_parameter(seçim)
+        else:
+            ana_cizgiler = ana_cizgiler.add_selection(seçim)
+        
+        # 2. Katman: Anomali Noktaları
+        anomali_noktalari = alt.Chart(anomali_noktalari_df).mark_circle(size=120, color='#D62728').encode(
+            x='Zaman:T',
+            y='Değer:Q',
+            tooltip=['Zaman:T', 'Değer:Q', 'Tip:N']
+        )
+        
+        bilesik_grafik = alt.layer(ana_cizgiler, anomali_noktalari).properties(height=450).interactive()
+        
+        grafik_alani.altair_chart(bilesik_grafik, width="stretch")
         
         if anomali_loglari:
             log_alani.dataframe(pd.DataFrame(anomali_loglari), width="stretch")
